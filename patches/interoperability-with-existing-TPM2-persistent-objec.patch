@@ -1,0 +1,384 @@
+From 6758deb9eee2447582cd7ee5871fece38bdd0227 Mon Sep 17 00:00:00 2001
+From: "wenxin.leong" <wenxin.leong@infineon.com>
+Date: Fri, 16 Apr 2021 13:23:59 +0800
+Subject: [PATCH] Interoperability with existing TPM2 persistent objects
+
+---
+ src/lib/attrs.c                       |  2 +
+ src/lib/attrs.h                       |  2 +
+ src/lib/session_ctx.c                 | 17 +++++-
+ src/lib/token.c                       | 44 +++++++++++---
+ src/lib/tpm.c                         | 21 +++++++
+ src/lib/tpm.h                         |  2 +
+ src/pkcs11.h                          |  2 +
+ tools/tpm2_pkcs11/commandlets_keys.py | 87 ++++++++++++++++++++++++++-
+ tools/tpm2_pkcs11/objects.py          | 50 +++++++++------
+ tools/tpm2_pkcs11/pkcs11t.py          |  3 +
+ 10 files changed, 197 insertions(+), 33 deletions(-)
+
+diff --git a/src/lib/attrs.c b/src/lib/attrs.c
+index 08610ee..c0c1a2a 100644
+--- a/src/lib/attrs.c
++++ b/src/lib/attrs.c
+@@ -169,6 +169,8 @@ static attr_handler2 attr_handlers[] = {
+     ADD_ATTR_HANDLER(CKA_TPM2_OBJAUTH_ENC, TYPE_BYTE_HEX_STR),
+     ADD_ATTR_HANDLER(CKA_TPM2_PUB_BLOB, TYPE_BYTE_HEX_STR),
+     ADD_ATTR_HANDLER(CKA_TPM2_PRIV_BLOB, TYPE_BYTE_HEX_STR),
++    ADD_ATTR_HANDLER(CKA_TPM2_PERSISTENT, TYPE_BYTE_BOOL),
++    ADD_ATTR_HANDLER(CKA_TPM2_PERSISTENT_HANDLE, TYPE_BYTE_HEX_STR),
+ };
+ 
+ static attr_handler2 default_handler = { .memtype = 0 };
+diff --git a/src/lib/attrs.h b/src/lib/attrs.h
+index 8a2ee4a..d9102c6 100644
+--- a/src/lib/attrs.h
++++ b/src/lib/attrs.h
+@@ -15,6 +15,8 @@
+ #define CKA_TPM2_PUB_BLOB    (CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x2UL)
+ #define CKA_TPM2_PRIV_BLOB   (CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x3UL)
+ #define CKA_TPM2_ENC_BLOB    (CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x4UL)
++#define CKA_TPM2_PERSISTENT           (CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x5UL)
++#define CKA_TPM2_PERSISTENT_HANDLE    (CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x6UL)
+ 
+ /* Invalid values for error detection */
+ #define CK_OBJECT_CLASS_BAD (~(CK_OBJECT_CLASS)0)
+diff --git a/src/lib/session_ctx.c b/src/lib/session_ctx.c
+index 6637c54..cef8498 100644
+--- a/src/lib/session_ctx.c
++++ b/src/lib/session_ctx.c
+@@ -317,10 +317,21 @@ CK_RV session_ctx_logout(session_ctx *ctx) {
+                 attr_pfree_cleanse(a);
+             }
+ 
++            CK_ATTRIBUTE_PTR p = attr_get_attribute_by_type(tobj->attrs, CKA_TPM2_PERSISTENT);
++            bool is_persistent_key = false;
++            if (p) {
++                assert(p->ulValueLen == sizeof(CK_BBOOL));
++                CK_BBOOL *b = (CK_BBOOL *)p->pValue;
++                assert(*b == CK_TRUE || *b == CK_FALSE);
++                is_persistent_key = *b == CK_TRUE;
++            }
++
+             if (tobj->tpm_handle) {
+-                bool result = tpm_flushcontext(tpm, tobj->tpm_handle);
+-                assert(result);
+-                UNUSED(result);
++                if (!is_persistent_key) {
++                    bool result = tpm_flushcontext(tpm, tobj->tpm_handle);
++                    assert(result);
++                    UNUSED(result);
++                }
+                 tobj->tpm_handle = 0;
+ 
+                 /* Clear the unwrapped auth value for tertiary objects */
+diff --git a/src/lib/token.c b/src/lib/token.c
+index 46d021e..df3ca21 100644
+--- a/src/lib/token.c
++++ b/src/lib/token.c
+@@ -525,7 +525,6 @@ out:
+ }
+ 
+ CK_RV token_load_object(token *tok, CK_OBJECT_HANDLE key, tobject **loaded_tobj) {
+-
+     tpm_ctx *tpm = tok->tctx;
+ 
+     CK_RV rv = token_find_tobject(tok, key, loaded_tobj);
+@@ -561,22 +560,49 @@ CK_RV token_load_object(token *tok, CK_OBJECT_HANDLE key, tobject **loaded_tobj)
+         return CKR_KEY_HANDLE_INVALID;
+     }
+ 
++    CK_ATTRIBUTE_PTR p = attr_get_attribute_by_type(tobj->attrs, CKA_TPM2_PERSISTENT);
++    bool is_persistent_key = false;
++    if (p) {
++        assert(p->ulValueLen == sizeof(CK_BBOOL));
++        CK_BBOOL *b = (CK_BBOOL *)p->pValue;
++        assert(*b == CK_TRUE || *b == CK_FALSE);
++        is_persistent_key = *b == CK_TRUE;
++    }
++
+     /*
+      * The object may already be loaded by the TPM or may just be
+      * a public key object not-resident in the TPM.
+      */
+-    if (tobj->tpm_handle || !tobj->pub) {
++    if (tobj->tpm_handle || (!tobj->pub && !is_persistent_key)) {
+         *loaded_tobj = tobj;
+         return CKR_OK;
+     }
+ 
+-    rv = tpm_loadobj(
+-            tpm,
+-            tok->pobject.handle, tok->pobject.objauth,
+-            tobj->pub, tobj->priv,
+-            &tobj->tpm_handle);
+-    if (rv != CKR_OK) {
+-        return rv;
++    if (is_persistent_key) {
++        CK_ATTRIBUTE_PTR sys_handle = attr_get_attribute_by_type(tobj->attrs, CKA_TPM2_PERSISTENT_HANDLE);
++        if (a && sys_handle->pValue && sys_handle->ulValueLen == 10) {
++            CK_BYTE buf[9];
++            uint32_t u32_sys_handle;
++            buf[8] = '\0';
++            memcpy(buf, sys_handle->pValue + 2, 8);
++            sscanf((const char *)buf, "%x", &u32_sys_handle);
++            if (tpm_get_sys_handle_to_esys_handle(tpm, u32_sys_handle, &tobj->tpm_handle) != CKR_OK) {
++                LOGE("Bad TPM persistent handle");
++                return CKR_TPM2_BAD_PERSISTENT_HANDLE;
++            }
++        } else {
++            LOGE("Bad TPM persistent handle");
++            return CKR_TPM2_BAD_PERSISTENT_HANDLE;
++        }
++    } else {
++        rv = tpm_loadobj(
++                tpm,
++                tok->pobject.handle, tok->pobject.objauth,
++                tobj->pub, tobj->priv,
++                &tobj->tpm_handle);
++        if (rv != CKR_OK) {
++            return rv;
++        }
+     }
+ 
+     rv = utils_ctx_unwrap_objauth(tok->wrappingkey, tobj->objauth,
+diff --git a/src/lib/tpm.c b/src/lib/tpm.c
+index 9815f2f..7d2e74d 100644
+--- a/src/lib/tpm.c
++++ b/src/lib/tpm.c
+@@ -3352,6 +3352,27 @@ CK_RV tpm_get_existing_primary(tpm_ctx *tpm, uint32_t *primary_handle, twist *pr
+     return CKR_OK;
+ }
+ 
++CK_RV tpm_get_sys_handle_to_esys_handle(tpm_ctx *tpm, uint32_t sys_handle, uint32_t *esys_handle) {
++
++    ESYS_TR handle = ESYS_TR_NONE;
++
++    TSS2_RC rval = Esys_TR_FromTPMPublic(
++        tpm->esys_ctx,
++        sys_handle,
++        ESYS_TR_NONE,
++        ESYS_TR_NONE,
++        ESYS_TR_NONE,
++        &handle);
++    if (rval != TSS2_RC_SUCCESS) {
++        LOGE("Esys_TR_FromTPMPublic: %s:", Tss2_RC_Decode(rval));
++        return CKR_GENERAL_ERROR;
++    }
++
++    *esys_handle = handle;
++
++    return CKR_OK;
++}
++
+ typedef CK_RV (*pfn_populate)(tpm_ctx *tpm, TPM2B_PUBLIC *pub);
+ 
+ typedef struct key_template key_template;
+diff --git a/src/lib/tpm.h b/src/lib/tpm.h
+index 1dc50b2..9f1c58c 100644
+--- a/src/lib/tpm.h
++++ b/src/lib/tpm.h
+@@ -172,6 +172,8 @@ CK_RV tpm2_getmechanisms(tpm_ctx *ctx, CK_MECHANISM_TYPE *mechanism_list, CK_ULO
+ 
+ CK_RV tpm_get_existing_primary(tpm_ctx *tpm, uint32_t *primary_handle, twist *primary_blob);
+ 
++CK_RV tpm_get_sys_handle_to_esys_handle(tpm_ctx *tpm, uint32_t sys_handle, uint32_t *esys_handle);
++
+ CK_RV tpm_create_persistent_primary(tpm_ctx *tpm, uint32_t *primary_handle, twist *primary_blob);
+ 
+ CK_RV tpm_create_transient_primary_from_template(tpm_ctx *tpm,
+diff --git a/src/pkcs11.h b/src/pkcs11.h
+index a26f084..92e0f1b 100644
+--- a/src/pkcs11.h
++++ b/src/pkcs11.h
+@@ -1548,6 +1548,8 @@ struct ck_c_initialize_args
+ #define CKR_FUNCTION_REJECTED			(0x200UL)
+ #define CKR_VENDOR_DEFINED			((unsigned long) (1UL << 31))
+ 
++#define CKR_VENDOR_TPM2_DEFINED                 (0x0F000000UL)
++#define CKR_TPM2_BAD_PERSISTENT_HANDLE          (CKR_VENDOR_DEFINED|CKR_VENDOR_TPM2_DEFINED|0x1UL)
+ 
+ #define CKZ_DATA_SPECIFIED			(0x01UL)
+ 
+diff --git a/tools/tpm2_pkcs11/commandlets_keys.py b/tools/tpm2_pkcs11/commandlets_keys.py
+index 4a5f471..53a3ecb 100644
+--- a/tools/tpm2_pkcs11/commandlets_keys.py
++++ b/tools/tpm2_pkcs11/commandlets_keys.py
+@@ -189,11 +189,18 @@ class NewKeyCommandBase(Command):
+ 
+                 # handle options that can add additional attributes
+                 always_auth = args['attr_always_authenticate']
+-                priv_attrs = {CKA_ALWAYS_AUTHENTICATE : always_auth}
++
++                if tertiarypub == 'persistent':
++                    priv_attrs = {CKA_ALWAYS_AUTHENTICATE : always_auth, CKA_TPM2_PERSISTENT : True}
++                    pub_attrs = {CKA_TPM2_PERSISTENT : True}
++                    tertiarypub = tertiarypriv
++                else:
++                    priv_attrs = {CKA_ALWAYS_AUTHENTICATE : always_auth, CKA_TPM2_PERSISTENT : False}
++                    pub_attrs = {CKA_TPM2_PERSISTENT : False}
+ 
+                 return NewKeyCommandBase.new_key_save(
+                     alg, key_label, tid, label, tertiarypriv, tertiarypub,
+-                    tertiarypubdata, encobjauth, db, tpm2, extra_privattrs=priv_attrs)
++                    tertiarypubdata, encobjauth, db, tpm2, extra_privattrs=priv_attrs, extra_pubattrs=pub_attrs)
+ 
+ 
+ @commandlet("import")
+@@ -659,3 +666,79 @@ class LinkCommand(NewKeyCommandBase):
+         objects = super(LinkCommand, self).__call__(args)
+         NewKeyCommandBase.output(objects, 'link')
+ 
++@commandlet("link-persist")
++class LinkPersistCommand(NewKeyCommandBase):
++    '''
++    Imports an existing TPM key to a token within a tpm2-pkcs11 store.
++    '''
++
++    # adhere to an interface
++    # pylint: disable=no-self-use
++    def generate_options(self, group_parser):
++        super(LinkPersistCommand, self).generate_options(group_parser)
++        group_parser.add_argument('privkey',
++            nargs='*',
++            help='Path of the key to be linked.\n')
++        group_parser.add_argument(
++            '--auth',
++            default='',
++            help='The auth value for the key to link.\n'
++        )
++
++    def new_key_init(self, label, sopin, userpin, hierarchyauth, pobj, sealobjects, tpm2, d):
++
++        pobj_handle = get_pobject(pobj, tpm2, hierarchyauth, d)
++
++        # Get the primary object encrypted auth value and sokey information
++        # to decode it. Based on the incoming pin
++        is_so = sopin != None
++        pin = sopin if is_so else userpin
++
++        pubkey = '%spub' % ('so' if is_so else 'user')
++        privkey = '%spriv' % ('so' if is_so else 'user')
++        saltkey = '%sauthsalt' % ('so' if is_so else 'user')
++
++        sealpub = sealobjects[pubkey]
++        sealpriv = sealobjects[privkey]
++        sealsalt = sealobjects[saltkey]
++
++        sealctx = tpm2.load(pobj_handle, pobj['objauth'], sealpriv, sealpub)
++
++        sealauth = hash_pass(pin, salt=sealsalt)['hash']
++
++        wrappingkey = tpm2.unseal(sealctx, sealauth)
++
++        wrapper = AESAuthUnwrapper(wrappingkey)
++
++        objauth = self._auth
++
++        encobjauth = wrapper.wrap(str2bytes(objauth))
++
++        return (encobjauth, objauth)
++
++
++    def create_from_key_blobs(self, pobj, objauth, hierarchyauth, tpm2, alg, keypaths, d):
++
++        tertiarypriv = keypaths[0]
++        tertiarypub = 'persistent'
++
++        tertiarypubdata, _ = tpm2.readpublic(tertiarypriv, False)
++
++        return (tertiarypriv, tertiarypub, tertiarypubdata)
++
++    # Links a new key
++    def new_key_create(self, pobj, objauth, hierarchyauth, tpm2, alg, keypaths, d):
++
++        if keypaths is None:
++            sys.exit("Keypath must be specified")
++
++        if len(keypaths) == 1:
++            return self.create_from_key_blobs(pobj, objauth, hierarchyauth, tpm2, alg, keypaths, d)
++
++        sys.exit("Expected one key handle, got: {}".format(len(keypaths)))
++
++    def __call__(self, args):
++        self._auth = args['auth'] if 'auth' in args else None
++        objects = super(LinkPersistCommand, self).__call__(args)
++        NewKeyCommandBase.output(objects, 'link')
++
+diff --git a/tools/tpm2_pkcs11/objects.py b/tools/tpm2_pkcs11/objects.py
+index 8542f81..5ebb524 100644
+--- a/tools/tpm2_pkcs11/objects.py
++++ b/tools/tpm2_pkcs11/objects.py
+@@ -20,25 +20,37 @@ class PKCS11Object(dict):
+             # hexencode the ENC obj auth string because str are hex encoded
+             attrs[CKA_TPM2_OBJAUTH_ENC] = binascii.hexlify(str2bytes(auth)).decode()
+ 
+-        #
+-        # the priv/pub tpm objects are paths to where they are stored, so
+-        # read them and convert to hex
+-        #
+-        privhex=None
+-        if tpm_priv is not None:
+-            with open(tpm_priv, "rb") as f:
+-                privhex = binascii.hexlify(f.read()).decode()
+-
+-        pubhex=None
+-        if tpm_pub is not None:
+-            with open(tpm_pub, "rb") as f:
+-                pubhex = binascii.hexlify(f.read()).decode()
+-
+-        if pubhex is not None:
+-            attrs[CKA_TPM2_PUB_BLOB] = pubhex
+-
+-        if privhex is not None:
+-            attrs[CKA_TPM2_PRIV_BLOB] = privhex
++        if ((CKA_TPM2_PERSISTENT in attrs) and (attrs[CKA_TPM2_PERSISTENT])):
++            #
++            # To link TPM's persistent objects to pkcs11 token,
++            # store its persistent handle instead of storing
++            # its priv/pub blob
++            #
++            if tpm_pub is not None:
++                attrs[CKA_TPM2_PERSISTENT_HANDLE] = binascii.hexlify(str2bytes(tpm_pub)).decode()
++
++            if tpm_priv is not None:
++                attrs[CKA_TPM2_PERSISTENT_HANDLE] = binascii.hexlify(str2bytes(tpm_priv)).decode()
++        else:
++            #
++            # the priv/pub tpm objects are paths to where they are stored, so
++            # read them and convert to hex
++            #
++            privhex=None
++            if tpm_priv is not None:
++                with open(tpm_priv, "rb") as f:
++                    privhex = binascii.hexlify(f.read()).decode()
++
++            pubhex=None
++            if tpm_pub is not None:
++                with open(tpm_pub, "rb") as f:
++                    pubhex = binascii.hexlify(f.read()).decode()
++
++            if pubhex is not None:
++                attrs[CKA_TPM2_PUB_BLOB] = pubhex
++
++            if privhex is not None:
++                attrs[CKA_TPM2_PRIV_BLOB] = privhex
+ 
+         self.update(attrs)
+ 
+diff --git a/tools/tpm2_pkcs11/pkcs11t.py b/tools/tpm2_pkcs11/pkcs11t.py
+index 9adc06e..8dc454f 100644
+--- a/tools/tpm2_pkcs11/pkcs11t.py
++++ b/tools/tpm2_pkcs11/pkcs11t.py
+@@ -95,6 +95,9 @@ CKA_VENDOR_TPM2_DEFINED=0x0F000000
+ CKA_TPM2_OBJAUTH_ENC=CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x1
+ CKA_TPM2_PUB_BLOB=CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x2
+ CKA_TPM2_PRIV_BLOB=CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x3
++CKA_TPM2_ENC_BLOB=CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x4
++CKA_TPM2_PERSISTENT=CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x5
++CKA_TPM2_PERSISTENT_HANDLE=CKA_VENDOR_DEFINED|CKA_VENDOR_TPM2_DEFINED|0x6
+ 
+ CKC_X_509 = 0
+ 
+-- 
+2.20.1
+
