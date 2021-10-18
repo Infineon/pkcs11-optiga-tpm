@@ -1,8 +1,8 @@
 # Introduction
 
-This section contains the guide to create a TPM-based PKCS #11 token using fapi as token backend.
+This section contains the guide to create a TPM-based PKCS #11 token using FAPI as token backend.
 
-- Use fapi instead of esysdb (sqlite) to provide disk storage service to [tpm2-pkcs11](https://github.com/tpm2-software/tpm2-pkcs11) ([read more](https://github.com/tpm2-software/tpm2-pkcs11/blob/master/docs/FAPI.md)).
+- Use FAPI instead of esysdb (SQLite) to provide disk storage service to [tpm2-pkcs11](https://github.com/tpm2-software/tpm2-pkcs11) ([read more](https://github.com/tpm2-software/tpm2-pkcs11/blob/master/docs/FAPI.md)).
 - Provide an option to link a TPM persistent key to a PKCS #11 token 
 - You will need a [Raspberry Pi 4](https://www.raspberrypi.org/products/raspberry-pi-4-model-b/) and an [Infineon IRIDIUM9670 TPM2.0 board](https://www.infineon.com/cms/en/product/evaluation-boards/iridium9670-tpm2.0-linux/)
 - You may use a TPM simulator, but it is not covered in this guide
@@ -129,7 +129,7 @@ Set tcti:
 $ export TPM2_PKCS11_TCTI="device:/dev/tpmrm0"
 ```
 
-Use fapi instead of esysdb (sqlite) as backend:
+Use FAPI instead of esysdb (SQLite) as backend:
 ```
 $ export TPM2_PKCS11_BACKEND="fapi"
 ```
@@ -155,12 +155,12 @@ $ alias tpm2pkcs11-tool='pkcs11-tool --module /usr/local/lib/libtpm2_pkcs11.so'
         "log_dir" : "/home/pi/.local/share/tpm2-tss/eventlog/"
     }
     ```
-2. Reset the fapi database by emptying the user_dir and system_dir.
+2. Reset the FAPI database by emptying the user_dir and system_dir.
 3. Clear TPM:
     ```
     $ tpm2_clear -c p
     ```
-4. Provision TPM using fapi.<br>
+4. Provision TPM using FAPI.<br>
 	Storage Root Key (SRK) will be created based on the profile `profile_dir/profile_name` and made persistent at handle `0x81000001` (specified in the profile too) without authorization value. TPM metadata is stored in the directory `system_dir`.
     ```
     $ tss2_provision

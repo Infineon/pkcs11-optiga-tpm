@@ -4,6 +4,8 @@ This document explains how an OPTIGA™ TPM SLx 9670 TPM2.0 can be integrated in
 
 PKCS #11 is a Public-Key Cryptography Standard that defines a standard platform-independent API to access cryptographic services from tokens, such as hardware security modules (HSM) and smart cards. This document provides guidance on how to setup a TPM-based token on a Raspberry Pi®.
 
+The document contains the guide to utilize either esysdb (SQLite) or FAPI as PKCS #11 backend.
+
 # Prerequisites
 
 Hardware prerequisites:
