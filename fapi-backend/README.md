@@ -9,7 +9,7 @@ This section contains the guide to create a TPM-based PKCS #11 token using FAPI 
 
 # Table of Contents
 
-**[Submodules](#submodules)**<br>
+**[Download Repositories](#download-repositories)**<br>
 **[Install Dependencies](#install-dependencies)**<br>
 **[Install tpm2-tss](#install-tpm2-tss)**<br>
 **[Install tpm2-tools](#install-tpm2-tools)**<br>
