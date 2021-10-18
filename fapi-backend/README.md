@@ -1,6 +1,6 @@
 # Introduction
 
-This repository contains a guide to create a TPM-based PKCS #11 token.
+This section contains the guide to create a TPM-based PKCS #11 token using fapi as token backend.
 
 - Use fapi instead of esysdb (sqlite) to provide disk storage service to [tpm2-pkcs11](https://github.com/tpm2-software/tpm2-pkcs11) ([read more](https://github.com/tpm2-software/tpm2-pkcs11/blob/master/docs/FAPI.md)).
 - Provide an option to link a TPM persistent key to a PKCS #11 token 
@@ -143,9 +143,7 @@ $ alias tpm2pkcs11-tool='pkcs11-tool --module /usr/local/lib/libtpm2_pkcs11.so'
 
 1. Recommended change in `/usr/local/etc/tpm2-tss/fapi-config.json`:
     - Move all directories to user space, hence prevent access permission issues and `double free or corruption` regression
-    - Change profile to `P_ECCP256SHA256` instead of `P_RSA2048SHA256` to greatly increase the performance
-   
-    Summary:
+    - Change profile to `P_ECCP256SHA256` instead of `P_RSA2048SHA256` to increase the performance:
     ```
     {
         "profile_name": "P_ECCP256SHA256",
