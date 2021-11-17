@@ -105,7 +105,7 @@ $ sudo su -c "echo 'dtoverlay=tpm-slb9670' >> /boot/config.txt"
 Power down your Raspberry Pi and attach the [Iridium 9670 TPM 2.0 board](https://www.infineon.com/cms/en/product/evaluation-boards/iridium9670-tpm2.0-linux/) according to the following image:
 
 <p align="center">
-    <img src="https://github.com/Infineon/pkcs11-optiga-tpm/raw/media/raspberry-with-tpm.jpg" width="50%">
+    <img src="https://github.com/Infineon/pkcs11-optiga-tpm/raw/main/media/raspberry-with-tpm.jpg" width="50%">
 </p>
 
 Power up your Raspberry Pi and check if the TPM is enabled by looking for the device nodes:
@@ -183,7 +183,7 @@ $ alias tpm2pkcs11-tool='pkcs11-tool --module /usr/local/lib/libtpm2_pkcs11.so'
 
 # Import TPM Persistent Key Pair (RSA)
 
-1. Create an RSA key pair and make it persistent:
+1. Create an RSA key pair and make it persistent. 3 options:
 	- Create it under the SRK `0x81000001`:
 	  ```
       $ tpm2_create -G rsa2048 -g sha256 -C 0x81000001 -u rsakey.pub -r rsakey.priv -a "fixedtpm|fixedparent|sensitivedataorigin|userwithauth|decrypt|sign" -p authvalue
