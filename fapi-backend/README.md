@@ -238,6 +238,7 @@ $ alias tpm2pkcs11-tool='pkcs11-tool --module /usr/local/lib/libtpm2_pkcs11.so'
 	# Output the public component of an imported key
 	$ tpm2pkcs11-tool --slot 1 --login --pin userpin --id 8081 --type pubkey --read-object > rsa.pub.der
 	$ openssl rsa -inform DER -outform PEM -in rsa.pub.der -pubin > rsa.pub.pem
+	$ openssl rsa -inform PEM -noout -text -in rsa.pub.pem -pubin
 	
 	# Generate test data
 	$ tpm2pkcs11-tool --slot 1 --generate-random 32 > data
