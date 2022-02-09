@@ -586,8 +586,9 @@ int main(int argc, char **argv)
     /** 
      * point it to an invalid path to prevent backend_esysdb from picking up any token
      * from the default dir ~/.tpm2_pkcs11/. Being overly cautious...
+     * Expected side effect "ERROR: Cannot open database: unable to open database file"
      */
-    setenv("TPM2_PKCS11_STORE", "~/nil", 0); 
+    //setenv("TPM2_PKCS11_STORE", "~/nil", 0);
 
     setenv("TPM2_PKCS11_BACKEND", "fapi", 0);
     setenv("TPM2_PKCS11_TCTI", "device:/dev/tpmrm0", 0);
