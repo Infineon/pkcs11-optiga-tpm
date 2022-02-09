@@ -220,13 +220,13 @@ $ alias tpm2pkcs11-tool='pkcs11-tool --module /usr/local/lib/libtpm2_pkcs11.so'
 4. Using a tool to invoke the key import operation:
     - Import key handle `0x81000002`:
       ```
-      $ cd ~/pkcs11-optiga-tpm/import-tool
+      $ cd ~/pkcs11-optiga-tpm/fapi-backend/import-tool
       $ gcc -Wall -g -DPERSISTENT_HANDLE=0x81000002 -DAUTH_VALUE=\"authvalue\" -o import import.c -ltpm2_pkcs11
       $ ./import
       ```
     - Import key handle `0x81800002`
       ```
-      $ cd ~/pkcs11-optiga-tpm/import-tool
+      $ cd ~/pkcs11-optiga-tpm/fapi-backend/import-tool
       $ gcc -Wall -g -DPERSISTENT_HANDLE=0x81800002 -DAUTH_VALUE=\"authvalue\" -o import import.c -ltpm2_pkcs11
       $ ./import
       ```
