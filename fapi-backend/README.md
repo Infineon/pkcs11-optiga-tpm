@@ -4,7 +4,11 @@ This section contains the guide to create a TPM-based PKCS #11 token using FAPI 
 
 - Use FAPI instead of esysdb (SQLite) to provide disk storage service to [tpm2-pkcs11](https://github.com/tpm2-software/tpm2-pkcs11) ([read more](https://github.com/tpm2-software/tpm2-pkcs11/blob/master/docs/FAPI.md)).
 - Provide an option to link a TPM persistent key to a PKCS #11 token 
-- You will need a [Raspberry Pi 4](https://www.raspberrypi.org/products/raspberry-pi-4-model-b/) and an [Infineon IRIDIUM9670 TPM2.0 board](https://www.infineon.com/cms/en/product/evaluation-boards/iridium9670-tpm2.0-linux/)
+- You will need a [Raspberry Pi 4](https://www.raspberrypi.org/products/raspberry-pi-4-model-b/) and either of the following TPM2.0 boards:
+  - [IRIDIUM9670 TPM2.0](https://www.infineon.com/cms/en/product/evaluation-boards/iridium9670-tpm2.0-linux/)\
+    <img src="https://github.com/Infineon/pkcs11-optiga-tpm/raw/main/media/IRIDIUM9670-TPM2.png" width="30%">
+  - [OPTIGA™ TPM SLB 9672 RPI evaluation board](https://www.infineon.com/cms/en/product/evaluation-boards/optiga-tpm-9672-rpi-eval/)\
+    <img src="https://github.com/Infineon/pkcs11-optiga-tpm/raw/main/media/SLB9672-EVA-BOARD.png" width="40%">
 - You may use a TPM simulator, but it is not covered in this guide
 
 # Table of Contents
@@ -102,11 +106,15 @@ Load the TPM overlay:
 $ sudo su -c "echo 'dtoverlay=tpm-slb9670' >> /boot/config.txt"
 ```
 
-Power down your Raspberry Pi and attach the [Iridium 9670 TPM 2.0 board](https://www.infineon.com/cms/en/product/evaluation-boards/iridium9670-tpm2.0-linux/) according to the following image:
+Power down your Raspberry Pi and attach the TPM2.0 board according to the following image:
 
 <p align="center">
     <img src="https://github.com/Infineon/pkcs11-optiga-tpm/raw/main/media/raspberry-with-tpm.jpg" width="50%">
 </p>
+<p align="center">
+    <img src="https://github.com/Infineon/pkcs11-optiga-tpm/raw/main/media/raspberry-with-tpm-9672.jpg" width="50%">
+</p>
+
 
 Power up your Raspberry Pi and check if the TPM is enabled by looking for the device nodes:
 

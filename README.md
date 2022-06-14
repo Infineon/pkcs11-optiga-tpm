@@ -1,6 +1,6 @@
 # Introduction
 
-This document explains how an OPTIGA™ TPM SLx 9670 TPM2.0 can be integrated into a Raspberry Pi® to create a TPM-based PKCS #11 cryptographic token.
+This document explains how an OPTIGA™ TPM SLx 967x TPM2.0 can be integrated into a Raspberry Pi® to create a TPM-based PKCS #11 cryptographic token.
 
 PKCS #11 is a Public-Key Cryptography Standard that defines a standard platform-independent API to access cryptographic services from tokens, such as hardware security modules (HSM) and smart cards. This document provides guidance on how to setup a TPM-based token on a Raspberry Pi®.
 
@@ -10,8 +10,11 @@ The document contains the guide to utilize either esysdb (SQLite) or FAPI as PKC
 
 Hardware prerequisites:
 - [Raspberry Pi® 4](https://www.raspberrypi.org/products/raspberry-pi-4-model-b/)
-- [IRIDIUM9670 TPM2.0](https://www.infineon.com/cms/en/product/evaluation-boards/iridium9670-tpm2.0-linux/)\
-  <img src="https://github.com/Infineon/pkcs11-optiga-tpm/raw/main/media/IRIDIUM9670-TPM2.png" width="30%">
+- Use either of the following TPM2.0 boards:
+  - [IRIDIUM9670 TPM2.0](https://www.infineon.com/cms/en/product/evaluation-boards/iridium9670-tpm2.0-linux/)\
+    <img src="https://github.com/Infineon/pkcs11-optiga-tpm/raw/main/media/IRIDIUM9670-TPM2.png" width="30%">
+  - [OPTIGA™ TPM SLB 9672 RPI evaluation board](https://www.infineon.com/cms/en/product/evaluation-boards/optiga-tpm-9672-rpi-eval/)\
+    <img src="https://github.com/Infineon/pkcs11-optiga-tpm/raw/main/media/SLB9672-EVA-BOARD.png" width="40%">
 
 # Getting Started
 
