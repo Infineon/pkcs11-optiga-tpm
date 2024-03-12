@@ -1,0 +1,67 @@
+name:
+  CI
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 0 * * MON'
+jobs:
+  test:
+    name: 'Testing'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        docker_image: ['ubuntu:22.04']
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: 'Set Environment Variables'
+        run: |
+          docker_image_sanitized=`echo ${{ matrix.docker_image }} | sed "s/:/-/"`
+          unique_string=${{ github.event.repository.name }}_${docker_image_sanitized}
+          job_workspace_dir=`realpath ${{ github.workspace }}/../${unique_string}`
+          echo "job_workspace_dir=${job_workspace_dir}" >> $GITHUB_ENV
+          echo "script_name=${unique_string}.sh" >> $GITHUB_ENV
+      - name: 'Test README.md Instructions'
+        env:
+          PROJECT_NAME: ${{ github.event.repository.name }}
+          DOCKER_IMAGE: ${{ matrix.docker_image }}
+          SCRIPT_NAME: ${{ env.script_name }}
+          JOB_WORKSPACE_DIR: ${{ env.job_workspace_dir }}
+          DOCKER_REGISTRY: 'https://registry.hub.docker.com/v2'
+          CONTAINER_NAME: ${{github.run_id}}
+        run: |
+          .github/docker/launcher.sh
+        shell: bash
+      - name: 'Upload Artifacts'
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: 'executed-test-scripts'
+          path: |
+            ${{ env.job_workspace_dir }}/${{ env.script_name }}
+  release:
+    name: 'Create Release'
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: 'Changelog Pruning'
+        run: |
+          sed -n `awk '/## \[${{ github.ref_name }}/{c++} c==1{ print NR; exit }' CHANGELOG.md`',$p' CHANGELOG.md > .CHANGELOG.md.tmp
+          sed `awk '/## \[[M0-9]/{c++} c==2{ print NR; exit }' .CHANGELOG.md.tmp`',$d' .CHANGELOG.md.tmp > ${{ github.workspace }}-CHANGELOG.txt
+      - name: 'Create Release'
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: ${{ github.workspace }}-CHANGELOG.txt
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
+          files: |
+            LICENSE
