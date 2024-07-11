@@ -1,4 +1,4 @@
-[![Github actions](https://github.com/wxleong/pkcs11-optiga-tpm/actions/workflows/main.yml/badge.svg)](https://github.com/wxleong/pkcs11-optiga-tpm/actions)
+[![Github actions](https://github.com/infineon/pkcs11-optiga-tpm/actions/workflows/main.yml/badge.svg)](https://github.com/infineon/pkcs11-optiga-tpm/actions)
 
 # Introduction
 
