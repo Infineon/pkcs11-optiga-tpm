@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   push:
   pull_request:
-  schedule:
-    - cron: '0 0 * * MON'
+  #schedule:
+  #  - cron: '0 0 * * MON'
 jobs:
   test:
     name: 'Testing'
